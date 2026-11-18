@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Зал">
+<meta name="theme-color" content="#0f1115">
+<title>Зал</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#262b36;--text:#e8eaf0;--muted:#8b93a7;--acc:#5eead4;--acc-ink:#06201c;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 96px)}
+#app{max-width:560px;margin:0 auto}
+h1{font-size:26px;margin:8px 0 4px}
+h2{font-size:14px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin:24px 0 8px}
+.sub{color:var(--muted);margin:0 0 14px}
+.top{display:flex;justify-content:space-between;align-items:center;min-height:36px}
+.link{background:none;border:0;color:var(--acc);font-size:17px;padding:6px 0}
+.pill{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px}
+.pill.ok{color:var(--acc)}.pill.err{color:var(--bad)}.pill.busy{color:var(--warn)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 12px}
+.big{width:100%;border:0;border-radius:14px;background:var(--acc);color:var(--acc-ink);font-size:18px;font-weight:700;padding:16px}
+.ghost{width:100%;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--text);font-size:16px;padding:13px;margin-top:8px;text-align:left}
+.ghost.center{text-align:center;color:var(--muted)}
+.ghost.danger{text-align:center;color:var(--bad)}
+.wk{display:flex;justify-content:space-between;align-items:center;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);font-size:17px;font-weight:600;padding:16px;margin:0 0 10px;text-align:left}
+.wk.sel{border-color:var(--acc)}
+.badge{color:var(--acc);font-size:12px;font-weight:600;border:1px solid var(--acc);border-radius:999px;padding:2px 8px;white-space:nowrap;margin-left:10px}
+.row{display:flex;gap:10px;align-items:baseline}
+.num{color:var(--muted);font-weight:700;min-width:18px}
+.name{font-size:18px;font-weight:650;flex:1}
+.target{color:var(--muted);font-size:14px;margin:2px 0 8px 28px}
+.target b{color:var(--warn);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-size:14px}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+.last{display:block;width:100%;text-align:left;background:#12151b;border:1px dashed var(--line);color:var(--muted);border-radius:12px;padding:10px 12px;font-size:14px;margin:0 0 10px}
+.last b{color:var(--text)}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;color:var(--muted);font-size:13px}
+input{width:100%;margin-top:4px;background:#0c0e12;border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:20px;padding:12px;font-family:inherit}
+input[type=date]{min-height:50px}
+input:focus{outline:2px solid var(--acc);border-color:transparent}
+input::placeholder{color:#4a5163}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(transparent,var(--bg) 30%)}
+.bar>div{max-width:560px;margin:0 auto}
+.hist{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;border-bottom:1px solid var(--line);color:var(--muted);font-size:15px;padding:12px 0;text-align:left}
+.hist b{color:var(--text);font-weight:500}
+.hist .r{white-space:nowrap;margin-left:10px}
+.del{margin-left:auto;background:none;border:1px solid var(--line);color:var(--bad);border-radius:10px;padding:4px 10px;font-size:13px}
+.res{font-size:18px;font-weight:650;margin:6px 0 0 28px}
+.res small{color:var(--muted);font-size:14px;font-weight:400}
+.note{color:var(--muted);font-size:14px}
+.msg{margin:10px 0;font-size:14px}
+.msg.err{color:var(--bad)}.msg.ok{color:var(--acc)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ====== ПЛАН ПО УМОЛЧАНИЮ ======
+// t: подходы × повторы; p: приоритетное (слабое) упражнение; v: варианты упражнения.
+// Дальше план можно менять прямо в приложении (кнопка «Изменить список упражнений»).
+const DEFAULT_PLAN = [
+  { title: "Тренировка 1: Грудь + трицепс", ex: [
+    { id:"c1", name:"Жим лёжа или гантелей на наклонной", t:"3×5-8", p:1, v:["Жим лёжа","Гантели на наклонной"] },
+    { id:"c2", name:"Жим гантелей на горизонтальной или в тренажёре", t:"2×8-10", v:["Гантели","Тренажёр"] },
+    { id:"c3", name:"Бабочка или разводки гантелей", t:"2×12-15", v:["Бабочка","Разводки"] },
+    { id:"c4", name:"Кроссовер или сведение на блоках (сверху вниз)", t:"1×12-15" },
+    { id:"c5", name:"Разгибания на трицепс на блоке", t:"2×10-12" },
+    { id:"c6", name:"Французский жим или разгибание из-за головы", t:"2×10-12", v:["Французский жим","Из-за головы"] }
+  ]},
+  { title: "Тренировка 2: Ноги", ex: [
+    { id:"l1", name:"Присед или жим ногами", t:"3×6-10", v:["Присед","Жим ногами"] },
+    { id:"l2", name:"Сгибания ног лёжа", t:"3×8-12" },
+    { id:"l3", name:"Болгарские сплит-приседы или выпады", t:"2×8-10 на ногу", v:["Болгарские","Выпады"] },
+    { id:"l4", name:"Ягодичный мост или хип-траст", t:"2×8-12", v:["Мост","Хип-траст"] },
+    { id:"l5", name:"Разгибания ног", t:"2×12-15" },
+    { id:"l6", name:"Сгибания ног сидя", t:"2×10-12" },
+    { id:"l7", name:"Икры стоя", t:"3×12-15" }
+  ]},
+  { title: "Тренировка 3: Плечи", ex: [
+    { id:"s1", name:"Жим штанги или гантелей на плечи, тяжело", t:"3×5-8", v:["Штанга","Гантели"] },
+    { id:"s2", name:"Махи гантелей в стороны", t:"3×12-20" },
+    { id:"s3", name:"Махи в сторону на блоке (одной рукой)", t:"2×15" },
+    { id:"s4", name:"Обратные разводки в бабочке или на блоках", t:"3×15-20", v:["Бабочка","Блоки"] },
+    { id:"s5", name:"Тяга к лицу на канате", t:"2×15" },
+    { id:"s6", name:"Подъёмы гантелей перед собой или жим Арнольда", t:"1-2×10-12", v:["Перед собой","Арнольд"] },
+    { id:"s7", name:"Шраги с гантелями", t:"2×10-12" },
+    { id:"s8", name:"Разгибания на трицепс на блоке", t:"1×10-12" }
+  ]},
+  { title: "Тренировка 4: Спина + бицепс", ex: [
+    { id:"b1", name:"Подтягивания или верхний блок", t:"3×6-8", p:1, v:["Подтягивания","Верхний блок"] },
+    { id:"b2", name:"Тяга нижнего блока", t:"2×8-10" },
+    { id:"b3", name:"Тяга гантели с упором или в тренажёре с упором грудью", t:"2×8-10", v:["Гантель","Тренажёр"] },
+    { id:"b4", name:"Пуловер на блоке или тяга прямыми руками", t:"2×12", v:["Пуловер","Прямыми руками"] },
+    { id:"b5", name:"Сгибания на бицепс со штангой или EZ-грифом", t:"2×8-10" },
+    { id:"b6", name:"Сгибания молотком", t:"2×10-12" },
+    { id:"b7", name:"Предплечья: сгибания кистей", t:"1×12-15" }
+  ]}
+];
+
+// ====== СОСТОЯНИЕ ======
+const $app = document.getElementById('app');
+function load(k, def){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; }catch(e){ return def; } }
+function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+let cfg   = Object.assign({ path:'data.json', branch:'main' }, load('gym_cfg', {}));
+let data  = load('gym_data', { sessions: [] });
+if(!data.sessions) data.sessions = [];
+let draft = load('gym_draft', null);   // { w, started, e: { id: {kg, reps, v} } }
+let view  = 'home';                    // home | workout | session | sedit | settings
+let viewId = null;                     // id открытой тренировки из истории
+let editS = null;                      // { id, e } — правка записанной тренировки
+let planEdit = false;                  // режим изменения списка упражнений
+let sync  = { state: 'off', msg: '' };
+let syncing = false, syncAgain = false;
+
+const getPlan = () => data.plan || DEFAULT_PLAN;
+const live = () => data.sessions.filter(s => !s.del);
+const planTitle = w => { const p = getPlan()[w]; return p ? p.title : '—'; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtKg = x => (Math.round(Number(x)*100)/100).toString().replace('.', ',');
+const fmtDate = iso => new Date(iso).toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
+const fmtDateLong = iso => new Date(iso).toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long' });
+const pad = n => String(n).padStart(2, '0');
+const dayStr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toNum = s => { const n = parseFloat(String(s).replace(',', '.')); return isNaN(n) ? null : n; };
+
+function lastFor(id){
+  const L = live();
+  for(let i = L.length - 1; i >= 0; i--){
+    const e = L[i].e[id];
+    if(e && (e.kg != null || e.reps != null)) return Object.assign({ date: L[i].date }, e);
+  }
+  return null;
+}
+function nextWorkout(){
+  const L = live(), last = L[L.length - 1];
+  return last ? (last.w + 1) % getPlan().length : 0;
+}
+function planEditApply(fn){
+  if(!data.plan) data.plan = JSON.parse(JSON.stringify(DEFAULT_PLAN));
+  fn(data.plan);
+  data.planTs = Date.now();
+  store('gym_data', data);
+  syncNow();
+}
+
+// ====== GITHUB ======
+const b64 = {
+  enc: s => { let bin = ''; new TextEncoder().encode(s).forEach(x => bin += String.fromCharCode(x)); return btoa(bin); },
+  dec: s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)))
+};
+const ghReady = () => cfg.owner && cfg.repo && cfg.token;
+const ghUrl = () => `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${(cfg.path || 'data.json').split('/').map(encodeURIComponent).join('/')}`;
+const ghHeaders = () => ({ 'Authorization': 'Bearer ' + cfg.token, 'Accept': 'application/vnd.github+json' });
+async function ghError(r){ try{ const j = await r.json(); return `${r.status}: ${j.message || 'ошибка'}`; }catch(e){ return 'Ошибка ' + r.status; } }
+
+async function ghGet(){
+  const r = await fetch(`${ghUrl()}?ref=${encodeURIComponent(cfg.branch || 'main')}&t=${Date.now()}`, { headers: ghHeaders(), cache: 'no-store' });
+  if(r.status === 404) return { data: { sessions: [] }, sha: null };
+  if(!r.ok) throw new Error(await ghError(r));
+  const j = await r.json();
+  const parsed = JSON.parse(b64.dec(j.content) || '{"sessions":[]}');
+  if(!parsed.sessions) parsed.sessions = [];
+  return { data: parsed, sha: j.sha };
+}
+async function ghPut(obj, sha){
+  const body = { message: 'Тренировки: ' + new Date().toISOString().slice(0, 10), content: b64.enc(JSON.stringify(obj, null, 1)), branch: cfg.branch || 'main' };
+  if(sha) body.sha = sha;
+  return fetch(ghUrl(), { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()), body: JSON.stringify(body) });
+}
+// Тренировки сливаются по id (побеждает более поздняя правка), план берётся более свежий.
+function merge(a, b){
+  const map = new Map();
+  [...a.sessions, ...b.sessions].forEach(s => {
+    const o = map.get(s.id);
+    if(!o || (s.upd || s.date) > (o.upd || o.date)) map.set(s.id, s);
+  });
+  const out = { sessions: [...map.values()].sort((x, y) => x.date < y.date ? -1 : 1) };
+  const src = (a.planTs || 0) >= (b.planTs || 0) ? a : b;
+  if(src.plan){ out.plan = src.plan; out.planTs = src.planTs; }
+  return out;
+}
+function setSync(state, msg){ sync = { state, msg: msg || '' }; updatePill(); }
+function pillText(){
+  return { off:'○ GitHub не подключён', busy:'◌ синхронизация…', ok:'● сохранено на GitHub', err:'● нет связи, нажми' }[sync.state];
+}
+function updatePill(){
+  document.querySelectorAll('.pill').forEach(p => { p.className = 'pill ' + sync.state; p.textContent = pillText(); });
+  const m = document.getElementById('syncmsg');
+  if(m){ m.className = 'msg ' + (sync.state === 'err' ? 'err' : sync.state === 'ok' ? 'ok' : ''); m.textContent = sync.msg; }
+}
+async function syncNow(){
+  if(!ghReady()){ setSync('off'); return; }
+  if(syncing){ syncAgain = true; return; }
+  syncing = true; setSync('busy');
+  try{
+    for(let i = 0; i < 3; i++){
+      const remote = await ghGet();
+      const merged = merge(data, remote.data);
+      const changed = JSON.stringify(merged) !== JSON.stringify(remote.data) || remote.sha === null;
+      data = merged; store('gym_data', data);
+      if(!changed){ setSync('ok', `Тренировок в истории: ${live().length}`); break; }
+      const r = await ghPut(merged, remote.sha);
+      if(r.ok){ setSync('ok', `Сохранено. Тренировок в истории: ${live().length}`); break; }
+      if((r.status === 409 || r.status === 422) && i < 2) continue;
+      throw new Error(await ghError(r));
+    }
+  }catch(e){
+    setSync('err', String(e.message || e));
+  }
+  syncing = false;
+  if(syncAgain){ syncAgain = false; syncNow(); }
+}
+
+// ====== ОБЩИЕ КУСОЧКИ ======
+const pill = () => `<button class="pill ${sync.state}" data-act="pill">${pillText()}</button>`;
+const curE = () => view === 'sedit' ? editS.e : draft.e;
+
+function lastText(last){
+  if(!last) return 'Прошлый раз: нет данных';
+  const kg = last.kg != null ? fmtKg(last.kg) + ' кг' : '—';
+  const reps = last.reps != null ? last.reps : '—';
+  return `Прошлый раз: <b>${kg} × ${reps}</b> · ${fmtDate(last.date)}${last.v ? ' · ' + esc(last.v) : ''}`;
+}
+function resText(en){
+  const kg = en.kg != null ? fmtKg(en.kg) + ' кг' : '—';
+  const reps = en.reps != null ? en.reps : '—';
+  return `${kg} × ${reps}${en.v ? ` <small>· ${esc(en.v)}</small>` : ''}`;
+}
+
+// Карточка упражнения: для тренировки (last = объект или null) и для правки (last = undefined).
+function entryCard(x, i, d, last){
+  const showLast = last !== undefined;
+  const lk = last && last.kg != null ? fmtKg(last.kg) : '';
+  const lr = last && last.reps != null ? last.reps : '';
+  return `<div class="card" data-ex="${esc(x.id)}">
+    <div class="row"><span class="num">${i + 1}</span><div class="name">${esc(x.name)}</div>${planEdit && view === 'workout' ? '<button class="del" data-act="delex">Удалить</button>' : ''}</div>
+    ${x.t || x.p ? `<div class="target">${esc(x.t || '')}${x.p ? (x.t ? ' · ' : '') + '<b>приоритет</b>' : ''}</div>` : ''}
+    ${x.v ? `<div class="chips">${x.v.map(c => `<button class="chip ${c === d.v ? 'on' : ''}" data-act="chip" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
+    ${showLast ? `<button class="last" data-act="fill">${lastText(last)}</button>` : ''}
+    <div class="inputs">
+      <label>кг<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" enterkeyhint="next" autocomplete="off" data-f="kg" value="${esc(d.kg || '')}" placeholder="${lk}"></label>
+      <label>повторы<input type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-f="reps" value="${esc(d.reps || '')}" placeholder="${lr}"></label>
+    </div>
+  </div>`;
+}
+
+function buildEntries(list, state){
+  const e = {};
+  list.forEach(x => {
+    const d = state[x.id]; if(!d) return;
+    const kg = toNum(d.kg || ''), reps = toNum(d.reps || '');
+    if(kg == null && reps == null) return;
+    e[x.id] = { kg, reps: reps == null ? null : Math.round(reps), n: x.name };
+    if(d.v) e[x.id].v = d.v;
+  });
+  return e;
+}
+// Упражнения тренировки: из текущего плана + те, что были записаны, но потом удалены из плана.
+function listFor(s){
+  const p = getPlan()[s.w];
+  const base = p ? p.ex.slice() : [];
+  const have = new Set(base.map(x => x.id));
+  Object.keys(s.e).forEach(id => { if(!have.has(id)) base.push({ id, name: s.e[id].n || 'Упражнение', t: '' }); });
+  return base;
+}
+
+// ====== ЭКРАНЫ ======
+function homeView(){
+  const n = nextWorkout(), P = getPlan();
+  let h = `<div class="top"><span></span>${pill()}</div><h1>Зал</h1>`;
+  if(draft){
+    h += `<div class="card"><div class="note">Не закончена</div><div class="name" style="margin:4px 0 12px">${esc(planTitle(draft.w))}</div><button class="big" data-act="resume">Продолжить тренировку</button></div>`;
+  }
+  h += `<h2>Начать тренировку</h2>`;
+  P.forEach((w, i) => { h += `<button class="wk ${i === n ? 'sel' : ''}" data-act="start" data-w="${i}"><span>${esc(w.title)}</span>${i === n ? '<span class="badge">по циклу</span>' : ''}</button>`; });
+  const hist = live().slice(-10).reverse();
+  if(hist.length){
+    h += `<h2>Последние</h2>`;
+    hist.forEach(s => { h += `<button class="hist" data-act="open" data-id="${esc(s.id)}"><b>${esc(planTitle(s.w))}</b><span class="r">${fmtDate(s.date)} ›</span></button>`; });
+  }
+  h += `<button class="ghost" style="margin-top:24px" data-act="settings">Настройки GitHub</button>`;
+  return h;
+}
+
+function workoutView(){
+  const W = getPlan()[draft.w];
+  let h = `<div class="top"><button class="link" data-act="home">‹ Назад</button>${pill()}</div>
+    <h1>${esc(W.title)}</h1><p class="sub">Вводи последний рабочий подход. Нажми на «Прошлый раз», чтобы подставить те же цифры.</p>`;
+  W.ex.forEach((x, i) => {
+    const last = lastFor(x.id);
+    const d = draft.e[x.id] = draft.e[x.id] || { v: (last && last.v) || (x.v ? x.v[0] : null) };
+    h += entryCard(x, i, d, last);
+  });
+  if(planEdit){
+    h += `<div class="card"><div class="name" style="margin-bottom:10px">Новое упражнение</div>
+      <label>Название<input type="text" id="n_name" autocomplete="off"></label><br>
+      <label>Подходы × повторы (необязательно)<input type="text" id="n_t" autocomplete="off" placeholder="2×10-12"></label><br>
+      <button class="big" data-act="addex">Добавить в список</button></div>`;
+  }
+  h += `<button class="ghost center" data-act="planedit">${planEdit ? 'Готово' : 'Изменить список упражнений'}</button>
+    <button class="ghost center" data-act="cancel">Отменить тренировку</button>
+    <div class="bar"><div><button class="big" data-act="finish">Завершить и сохранить</button></div></div>`;
+  store('gym_draft', draft);
+  return h;
+}
+
+function sessionView(){
+  const s = data.sessions.find(x => x.id === viewId);
+  if(!s || s.del){ view = 'home'; return homeView(); }
+  let h = `<div class="top"><button class="link" data-act="home">‹ Назад</button>${pill()}</div>
+    <h1>${esc(planTitle(s.w))}</h1><p class="sub">${esc(fmtDateLong(s.date))}</p>`;
+  const items = listFor(s).filter(x => s.e[x.id]);
+  if(!items.length) h += `<p class="note">Данных нет.</p>`;
+  items.forEach((x, i) => {
+    h += `<div class="card"><div class="row"><span class="num">${i + 1}</span><div class="name">${esc(x.name)}</div></div><div class="res">${resText(s.e[x.id])}</div></div>`;
+  });
+  h += `<button class="big" data-act="editsession" style="margin-top:8px">Изменить данные</button>
+    <button class="ghost danger" data-act="delsession">Удалить тренировку</button>`;
+  return h;
+}
+
+function editView(){
+  const s = data.sessions.find(x => x.id === viewId);
+  if(!s || !editS){ view = 'home'; return homeView(); }
+  let h = `<div class="top"><button class="link" data-act="back2session">‹ Отмена</button>${pill()}</div>
+    <h1>Изменить данные</h1><p class="sub">${esc(planTitle(s.w))}</p>
+    <div class="card"><label>Дата<input type="date" id="e_date" value="${dayStr(new Date(s.date))}"></label></div>`;
+  listFor(s).forEach((x, i) => { h += entryCard(x, i, editS.e[x.id] || (editS.e[x.id] = {}), undefined); });
+  h += `<div class="bar"><div><button class="big" data-act="saveedit">Сохранить изменения</button></div></div>`;
+  return h;
+}
+
+function settingsView(){
+  return `<div class="top"><button class="link" data-act="home">‹ Назад</button>${pill()}</div>
+  <h1>GitHub</h1>
+  <p class="sub">История и список упражнений хранятся в файле на GitHub. Токен лежит только в памяти этого браузера.</p>
+  <div class="card">
+    <label>Владелец (логин)<input type="text" id="c_owner" autocapitalize="off" autocorrect="off" value="${esc(cfg.owner || '')}"></label><br>
+    <label>Репозиторий<input type="text" id="c_repo" autocapitalize="off" autocorrect="off" value="${esc(cfg.repo || '')}"></label><br>
+    <label>Ветка<input type="text" id="c_branch" autocapitalize="off" autocorrect="off" value="${esc(cfg.branch || 'main')}"></label><br>
+    <label>Файл данных<input type="text" id="c_path" autocapitalize="off" autocorrect="off" value="${esc(cfg.path || 'data.json')}"></label><br>
+    <label>Токен (fine-grained, Contents: Read and write)<input type="password" id="c_token" autocapitalize="off" autocorrect="off" value="${esc(cfg.token || '')}"></label>
+  </div>
+  <button class="big" data-act="savecfg">Сохранить и проверить</button>
+  <div id="syncmsg" class="msg"></div>
+  <p class="note">Если открываешь страницу с домашнего экрана, настройки нужно ввести заново: у иконки и у Safari отдельная память.</p>`;
+}
+
+function render(keepScroll){
+  $app.innerHTML = view === 'workout' && draft ? workoutView()
+    : view === 'session' ? sessionView()
+    : view === 'sedit' ? editView()
+    : view === 'settings' ? settingsView() : homeView();
+  if(!keepScroll) window.scrollTo(0, 0);
+  updatePill();
+}
+
+// ====== ДЕЙСТВИЯ ======
+function startWorkout(w){
+  draft = { w, started: new Date().toISOString(), e: {} };
+  planEdit = false; view = 'workout'; render();
+}
+function finish(){
+  const e = buildEntries(getPlan()[draft.w].ex, draft.e);
+  if(!Object.keys(e).length){ alert('Нет ни одного введённого упражнения'); return; }
+  const now = new Date().toISOString();
+  data.sessions.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: now, upd: now, w: draft.w, e });
+  data.sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+  store('gym_data', data);
+  draft = null; store('gym_draft', null);
+  planEdit = false; view = 'home'; render();
+  syncNow();
+}
+function openEdit(s){
+  const e = {};
+  listFor(s).forEach(x => {
+    const en = s.e[x.id];
+    e[x.id] = en ? { kg: en.kg != null ? fmtKg(en.kg) : '', reps: en.reps != null ? String(en.reps) : '', v: en.v || (x.v ? x.v[0] : null) } : { v: x.v ? x.v[0] : null };
+  });
+  editS = { id: s.id, e };
+  view = 'sedit'; render();
+}
+function saveEdit(s){
+  const e = buildEntries(listFor(s), editS.e);
+  const dt = document.getElementById('e_date').value;
+  if(dt && dt !== dayStr(new Date(s.date))) s.date = new Date(dt + 'T12:00:00').toISOString();
+  s.e = e; s.upd = new Date().toISOString();
+  data.sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+  store('gym_data', data);
+  editS = null; view = 'session'; render();
+  syncNow();
+}
+
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-act]'); if(!b) return;
+  const a = b.dataset.act;
+  const g = id => (document.getElementById(id).value || '').trim();
+  if(a === 'home'){ planEdit = false; editS = null; view = 'home'; render(); }
+  else if(a === 'settings'){ view = 'settings'; render(); }
+  else if(a === 'start'){
+    if(draft && !confirm('Текущая незаконченная тренировка будет удалена. Продолжить?')) return;
+    startWorkout(Number(b.dataset.w));
+  }
+  else if(a === 'resume'){ planEdit = false; view = 'workout'; render(); }
+  else if(a === 'cancel'){ if(confirm('Удалить введённые данные этой тренировки?')){ draft = null; store('gym_draft', null); planEdit = false; view = 'home'; render(); } }
+  else if(a === 'finish'){ finish(); }
+  else if(a === 'pill'){ if(ghReady()) syncNow(); else { view = 'settings'; render(); } }
+  else if(a === 'chip'){
+    const card = b.closest('.card'), id = card.dataset.ex;
+    curE()[id].v = b.dataset.v; if(view === 'workout') store('gym_draft', draft);
+    card.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
+  }
+  else if(a === 'fill'){
+    const card = b.closest('.card'), id = card.dataset.ex, last = lastFor(id); if(!last) return;
+    const d = draft.e[id];
+    d.kg = last.kg != null ? fmtKg(last.kg) : ''; d.reps = last.reps != null ? String(last.reps) : '';
+    if(last.v){ d.v = last.v; card.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === last.v)); }
+    card.querySelector('[data-f=kg]').value = d.kg; card.querySelector('[data-f=reps]').value = d.reps;
+    store('gym_draft', draft);
+  }
+  else if(a === 'open'){ viewId = b.dataset.id; view = 'session'; render(); }
+  else if(a === 'back2session'){ editS = null; view = 'session'; render(); }
+  else if(a === 'editsession'){ const s = data.sessions.find(x => x.id === viewId); if(s) openEdit(s); }
+  else if(a === 'saveedit'){ const s = data.sessions.find(x => x.id === viewId); if(s) saveEdit(s); }
+  else if(a === 'delsession'){
+    const s = data.sessions.find(x => x.id === viewId);
+    if(s && confirm('Удалить эту тренировку из истории?')){
+      s.del = true; s.upd = new Date().toISOString(); store('gym_data', data);
+      view = 'home'; render(); syncNow();
+    }
+  }
+  else if(a === 'planedit'){ planEdit = !planEdit; render(true); }
+  else if(a === 'delex'){
+    const id = b.closest('.card').dataset.ex;
+    if(!confirm('Убрать упражнение из списка? Старые записи в истории останутся.')) return;
+    planEditApply(p => { const ex = p[draft.w].ex, i = ex.findIndex(x => x.id === id); if(i >= 0) ex.splice(i, 1); });
+    delete draft.e[id]; store('gym_draft', draft); render(true);
+  }
+  else if(a === 'addex'){
+    const name = g('n_name'), t = g('n_t');
+    if(!name){ alert('Введи название упражнения'); return; }
+    planEditApply(p => p[draft.w].ex.push({ id: 'x' + Date.now().toString(36), name, t }));
+    render(true);
+  }
+  else if(a === 'savecfg'){
+    cfg = { owner: g('c_owner'), repo: g('c_repo'), branch: g('c_branch') || 'main', path: g('c_path') || 'data.json', token: g('c_token') };
+    store('gym_cfg', cfg);
+    await syncNow();
+  }
+});
+
+// Ввод: только цифры (в кг ещё точка/запятая), значение сохраняется сразу.
+document.addEventListener('input', ev => {
+  const f = ev.target.dataset && ev.target.dataset.f; if(!f) return;
+  const card = ev.target.closest('.card'); if(!card) return;
+  const clean = f === 'kg' ? ev.target.value.replace(/[^0-9.,]/g, '') : ev.target.value.replace(/\D/g, '');
+  if(clean !== ev.target.value) ev.target.value = clean;
+  const e = view === 'sedit' ? editS && editS.e : draft && draft.e;
+  if(!e) return;
+  const id = card.dataset.ex;
+  e[id] = e[id] || {};
+  e[id][f] = clean;
+  if(view === 'workout') store('gym_draft', draft);
+});
+// При фокусе выделяем всё содержимое поля, чтобы новое число заменяло старое.
+document.addEventListener('focusin', ev => {
+  if(ev.target.dataset && ev.target.dataset.f) setTimeout(() => { try{ ev.target.select(); }catch(e){} }, 0);
+});
+
+render();
+syncNow();
+</script>
+</body>
+</html>

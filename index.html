@@ -50,7 +50,9 @@ input::placeholder{color:#4a5163}
 .hist{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;border-bottom:1px solid var(--line);color:var(--muted);font-size:15px;padding:12px 0;text-align:left}
 .hist b{color:var(--text);font-weight:500}
 .hist .r{white-space:nowrap;margin-left:10px}
-.del{margin-left:auto;background:none;border:1px solid var(--line);color:var(--bad);border-radius:10px;padding:4px 10px;font-size:13px}
+.acts{display:flex;gap:6px;margin-left:auto}
+.del,.edt{background:none;border:1px solid var(--line);color:var(--bad);border-radius:10px;padding:4px 10px;font-size:13px}
+.edt{color:var(--acc)}
 .res{font-size:18px;font-weight:650;margin:6px 0 0 28px}
 .res small{color:var(--muted);font-size:14px;font-weight:400}
 .note{color:var(--muted);font-size:14px}
@@ -114,6 +116,7 @@ let draft = load('gym_draft', null);   // { w, started, e: { id: {kg, reps, v} }
 let view  = 'home';                    // home | workout | session | sedit | settings
 let viewId = null;                     // id открытой тренировки из истории
 let editS = null;                      // { id, e } — правка записанной тренировки
+let editEx = null;                     // id упражнения, которое сейчас правится в списке
 let planEdit = false;                  // режим изменения списка упражнений
 let sync  = { state: 'off', msg: '' };
 let syncing = false, syncAgain = false;
@@ -129,11 +132,13 @@ const pad = n => String(n).padStart(2, '0');
 const dayStr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const toNum = s => { const n = parseFloat(String(s).replace(',', '.')); return isNaN(n) ? null : n; };
 
-function lastFor(id){
+const byDate = (a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+// Прошлый результат упражнения; если указан вариант (штанга, гантели…), то именно по нему.
+function lastFor(id, v){
   const L = live();
   for(let i = L.length - 1; i >= 0; i--){
     const e = L[i].e[id];
-    if(e && (e.kg != null || e.reps != null)) return Object.assign({ date: L[i].date }, e);
+    if(e && (e.kg != null || e.reps != null) && (!v || e.v === v)) return Object.assign({ date: L[i].date }, e);
   }
   return null;
 }
@@ -180,7 +185,7 @@ function merge(a, b){
     const o = map.get(s.id);
     if(!o || (s.upd || s.date) > (o.upd || o.date)) map.set(s.id, s);
   });
-  const out = { sessions: [...map.values()].sort((x, y) => x.date < y.date ? -1 : 1) };
+  const out = { sessions: [...map.values()].sort(byDate) };
   const src = (a.planTs || 0) >= (b.planTs || 0) ? a : b;
   if(src.plan){ out.plan = src.plan; out.planTs = src.planTs; }
   return out;
@@ -221,8 +226,8 @@ async function syncNow(){
 const pill = () => `<button class="pill ${sync.state}" data-act="pill">${pillText()}</button>`;
 const curE = () => view === 'sedit' ? editS.e : draft.e;
 
-function lastText(last){
-  if(!last) return 'Прошлый раз: нет данных';
+function lastText(last, v){
+  if(!last) return v ? `Прошлый раз (${esc(v)}): нет данных` : 'Прошлый раз: нет данных';
   const kg = last.kg != null ? fmtKg(last.kg) + ' кг' : '—';
   const reps = last.reps != null ? last.reps : '—';
   return `Прошлый раз: <b>${kg} × ${reps}</b> · ${fmtDate(last.date)}${last.v ? ' · ' + esc(last.v) : ''}`;
@@ -233,16 +238,54 @@ function resText(en){
   return `${kg} × ${reps}${en.v ? ` <small>· ${esc(en.v)}</small>` : ''}`;
 }
 
+const hasV = x => x.v && x.v.length > 0;
+// Если у упражнения есть варианты, выбранный должен быть из списка; по умолчанию — последний использованный.
+function normVariant(x, d){
+  if(!hasV(x)){ d.v = null; return; }
+  if(!x.v.includes(d.v)){
+    const any = lastFor(x.id);
+    d.v = any && any.v && x.v.includes(any.v) ? any.v : x.v[0];
+  }
+}
+const findEx = id => (getPlan()[draft.w] || { ex: [] }).ex.find(x => x.id === id);
+function readVariants(p){
+  const out = [];
+  for(let i = 0; i < 3; i++){
+    const el = document.getElementById(p + i), t = el ? el.value.trim() : '';
+    if(t && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+const variantInputs = (p, arr) => [0, 1, 2].map(i => `<label>Вариант ${i + 1}<input type="text" id="${p}${i}" maxlength="24" autocomplete="off" value="${esc((arr && arr[i]) || '')}"></label>`).join('<br>');
+const VNOTE = 'Варианты (до 3), например: Штанга, Гантели, Тренажёр. У каждого варианта свой прошлый результат.';
+function exForm(x){
+  return `<div class="card"><div class="name" style="margin-bottom:10px">Изменить упражнение</div>
+    <label>Название<input type="text" id="x_name" autocomplete="off" value="${esc(x.name)}"></label><br>
+    <label>Подходы × повторы<input type="text" id="x_t" autocomplete="off" value="${esc(x.t || '')}"></label><br>
+    <div class="note" style="margin-bottom:6px">${VNOTE}</div>
+    ${variantInputs('x_v', x.v)}<br>
+    <button class="big" data-act="savex">Сохранить</button>
+    <button class="ghost center" data-act="cancelx">Отмена</button></div>`;
+}
+// Обновить «Прошлый раз» и подсказки в полях под выбранный вариант.
+function refreshLast(card){
+  const id = card.dataset.ex, x = findEx(id), d = draft.e[id]; if(!x || !d) return;
+  const v = hasV(x) ? d.v : null, last = lastFor(id, v);
+  const lb = card.querySelector('.last'); if(lb) lb.innerHTML = lastText(last, v);
+  card.querySelector('[data-f=kg]').placeholder = last && last.kg != null ? fmtKg(last.kg) : '';
+  card.querySelector('[data-f=reps]').placeholder = last && last.reps != null ? last.reps : '';
+}
+
 // Карточка упражнения: для тренировки (last = объект или null) и для правки (last = undefined).
 function entryCard(x, i, d, last){
   const showLast = last !== undefined;
   const lk = last && last.kg != null ? fmtKg(last.kg) : '';
   const lr = last && last.reps != null ? last.reps : '';
   return `<div class="card" data-ex="${esc(x.id)}">
-    <div class="row"><span class="num">${i + 1}</span><div class="name">${esc(x.name)}</div>${planEdit && view === 'workout' ? '<button class="del" data-act="delex">Удалить</button>' : ''}</div>
+    <div class="row"><span class="num">${i + 1}</span><div class="name">${esc(x.name)}</div>${planEdit && view === 'workout' ? '<span class="acts"><button class="edt" data-act="editex">Изменить</button><button class="del" data-act="delex">Удалить</button></span>' : ''}</div>
     ${x.t || x.p ? `<div class="target">${esc(x.t || '')}${x.p ? (x.t ? ' · ' : '') + '<b>приоритет</b>' : ''}</div>` : ''}
-    ${x.v ? `<div class="chips">${x.v.map(c => `<button class="chip ${c === d.v ? 'on' : ''}" data-act="chip" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
-    ${showLast ? `<button class="last" data-act="fill">${lastText(last)}</button>` : ''}
+    ${hasV(x) ? `<div class="chips">${x.v.map(c => `<button class="chip ${c === d.v ? 'on' : ''}" data-act="chip" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
+    ${showLast ? `<button class="last" data-act="fill">${lastText(last, hasV(x) ? d.v : null)}</button>` : ''}
     <div class="inputs">
       <label>кг<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" enterkeyhint="next" autocomplete="off" data-f="kg" value="${esc(d.kg || '')}" placeholder="${lk}"></label>
       <label>повторы<input type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-f="reps" value="${esc(d.reps || '')}" placeholder="${lr}"></label>
@@ -293,14 +336,17 @@ function workoutView(){
   let h = `<div class="top"><button class="link" data-act="home">‹ Назад</button>${pill()}</div>
     <h1>${esc(W.title)}</h1><p class="sub">Вводи последний рабочий подход. Нажми на «Прошлый раз», чтобы подставить те же цифры.</p>`;
   W.ex.forEach((x, i) => {
-    const last = lastFor(x.id);
-    const d = draft.e[x.id] = draft.e[x.id] || { v: (last && last.v) || (x.v ? x.v[0] : null) };
-    h += entryCard(x, i, d, last);
+    if(planEdit && editEx === x.id){ h += exForm(x); return; }
+    const d = draft.e[x.id] = draft.e[x.id] || {};
+    normVariant(x, d);
+    h += entryCard(x, i, d, lastFor(x.id, hasV(x) ? d.v : null));
   });
   if(planEdit){
     h += `<div class="card"><div class="name" style="margin-bottom:10px">Новое упражнение</div>
       <label>Название<input type="text" id="n_name" autocomplete="off"></label><br>
       <label>Подходы × повторы (необязательно)<input type="text" id="n_t" autocomplete="off" placeholder="2×10-12"></label><br>
+      <div class="note" style="margin-bottom:6px">${VNOTE} Можно оставить пустыми.</div>
+      ${variantInputs('n_v', null)}<br>
       <button class="big" data-act="addex">Добавить в список</button></div>`;
   }
   h += `<button class="ghost center" data-act="planedit">${planEdit ? 'Готово' : 'Изменить список упражнений'}</button>
@@ -364,14 +410,14 @@ function render(keepScroll){
 // ====== ДЕЙСТВИЯ ======
 function startWorkout(w){
   draft = { w, started: new Date().toISOString(), e: {} };
-  planEdit = false; view = 'workout'; render();
+  planEdit = false; editEx = null; view = 'workout'; render();
 }
 function finish(){
   const e = buildEntries(getPlan()[draft.w].ex, draft.e);
   if(!Object.keys(e).length){ alert('Нет ни одного введённого упражнения'); return; }
   const now = new Date().toISOString();
   data.sessions.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: now, upd: now, w: draft.w, e });
-  data.sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+  data.sessions.sort(byDate);
   store('gym_data', data);
   draft = null; store('gym_draft', null);
   planEdit = false; view = 'home'; render();
@@ -391,7 +437,7 @@ function saveEdit(s){
   const dt = document.getElementById('e_date').value;
   if(dt && dt !== dayStr(new Date(s.date))) s.date = new Date(dt + 'T12:00:00').toISOString();
   s.e = e; s.upd = new Date().toISOString();
-  data.sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+  data.sessions.sort(byDate);
   store('gym_data', data);
   editS = null; view = 'session'; render();
   syncNow();
@@ -401,7 +447,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
   const g = id => (document.getElementById(id).value || '').trim();
-  if(a === 'home'){ planEdit = false; editS = null; view = 'home'; render(); }
+  if(a === 'home'){ planEdit = false; editEx = null; editS = null; view = 'home'; render(); }
   else if(a === 'settings'){ view = 'settings'; render(); }
   else if(a === 'start'){
     if(draft && !confirm('Текущая незаконченная тренировка будет удалена. Продолжить?')) return;
@@ -415,12 +461,12 @@ document.addEventListener('click', async ev => {
     const card = b.closest('.card'), id = card.dataset.ex;
     curE()[id].v = b.dataset.v; if(view === 'workout') store('gym_draft', draft);
     card.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
+    if(view === 'workout') refreshLast(card);   // «Прошлый раз» — по выбранному варианту
   }
   else if(a === 'fill'){
-    const card = b.closest('.card'), id = card.dataset.ex, last = lastFor(id); if(!last) return;
-    const d = draft.e[id];
+    const card = b.closest('.card'), id = card.dataset.ex, x = findEx(id), d = draft.e[id];
+    const last = x ? lastFor(id, hasV(x) ? d.v : null) : null; if(!last) return;
     d.kg = last.kg != null ? fmtKg(last.kg) : ''; d.reps = last.reps != null ? String(last.reps) : '';
-    if(last.v){ d.v = last.v; card.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === last.v)); }
     card.querySelector('[data-f=kg]').value = d.kg; card.querySelector('[data-f=reps]').value = d.reps;
     store('gym_draft', draft);
   }
@@ -435,7 +481,19 @@ document.addEventListener('click', async ev => {
       view = 'home'; render(); syncNow();
     }
   }
-  else if(a === 'planedit'){ planEdit = !planEdit; render(true); }
+  else if(a === 'planedit'){ planEdit = !planEdit; if(!planEdit) editEx = null; render(true); }
+  else if(a === 'editex'){ editEx = b.closest('.card').dataset.ex; render(true); }
+  else if(a === 'cancelx'){ editEx = null; render(true); }
+  else if(a === 'savex'){
+    const name = g('x_name'), t = g('x_t'), v = readVariants('x_v'), id = editEx;
+    if(!name){ alert('Название не может быть пустым'); return; }
+    planEditApply(p => {
+      const x = p[draft.w].ex.find(y => y.id === id); if(!x) return;
+      x.name = name; x.t = t;
+      if(v.length) x.v = v; else delete x.v;
+    });
+    editEx = null; render(true);
+  }
   else if(a === 'delex'){
     const id = b.closest('.card').dataset.ex;
     if(!confirm('Убрать упражнение из списка? Старые записи в истории останутся.')) return;
@@ -443,9 +501,9 @@ document.addEventListener('click', async ev => {
     delete draft.e[id]; store('gym_draft', draft); render(true);
   }
   else if(a === 'addex'){
-    const name = g('n_name'), t = g('n_t');
+    const name = g('n_name'), t = g('n_t'), v = readVariants('n_v');
     if(!name){ alert('Введи название упражнения'); return; }
-    planEditApply(p => p[draft.w].ex.push({ id: 'x' + Date.now().toString(36), name, t }));
+    planEditApply(p => { const x = { id: 'x' + Date.now().toString(36), name, t }; if(v.length) x.v = v; p[draft.w].ex.push(x); });
     render(true);
   }
   else if(a === 'savecfg'){
